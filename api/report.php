@@ -212,6 +212,150 @@ if ($action === 'listStocks') {
             ]
         ];
     }
+} else if ($action === 'listWeeklySalary') {
+    $query = "SELECT * FROM weekly_salary WHERE delete_at = 0 ORDER BY create_at DESC";
+    $result = $conn->query($query);
+
+    if ($result && $result->num_rows > 0) {
+        $weekly_salary = [];
+        while ($row = $result->fetch_assoc()) {
+            $weekly_salary[] = [
+                "id" => $row["id"],
+                "weekly_salary_id" => $row["weekly_salary_id"],
+                "from_date" => $row["from_date"],
+                "to_date" => $row["to_date"],
+                "salary_data" => json_decode($row["salary_data"], true), // Decode JSON data
+                "create_at" => $row["create_at"]
+            ];
+        }
+        $output = [
+            "head" => ["code" => 200, "msg" => "Success"],
+            "body" => ["weekly_salary" => $weekly_salary]
+        ];
+    } else {
+        $output = [
+            "head" => ["code" => 200, "msg" => "No Weekly Salary Found"],
+            "body" => ["weekly_salary" => []]
+        ];
+    }
+} elseif ($action === 'createWeeklySalary') {
+    $data = $obj['data'] ?? null;
+    $from_date = $obj['from_date'] ?? null;
+    $to_date = $obj['to_date'] ?? null;
+
+    if (empty($from_date) || empty($to_date) || empty($data) || !is_array($data)) {
+        $output = [
+            "head" => ["code" => 400, "msg" => "Missing or invalid parameters: from_date, to_date, and data (array) required"]
+        ];
+    } else {
+        $from_date_obj = new DateTime($from_date);
+        $to_date_obj = new DateTime($to_date);
+        $formatted_from = $from_date_obj->format('Y-m-d');
+        $formatted_to = $to_date_obj->format('Y-m-d');
+        $data_json = json_encode($data, JSON_UNESCAPED_UNICODE);
+
+        // Check for overlapping date ranges
+        $stmtCheck = $conn->prepare("SELECT COUNT(*) as count FROM weekly_salary WHERE ? <= to_date AND ? >= from_date AND delete_at = 0");
+        $stmtCheck->bind_param("ss", $formatted_from, $formatted_to);
+        $stmtCheck->execute();
+        $resultCheck = $stmtCheck->get_result();
+        $rowCheck = $resultCheck->fetch_assoc();
+        $stmtCheck->close();
+
+        if ($rowCheck['count'] > 0) {
+            $output = [
+                "head" => ["code" => 400, "msg" => "Weekly salary already exists for overlapping date range"]
+            ];
+        } else {
+            // Start transaction for consistency
+            $conn->begin_transaction();
+
+            try {
+                $stmt = $conn->prepare("INSERT INTO weekly_salary (weekly_salary_id, from_date, to_date, salary_data, create_at) VALUES (?, ?, ?, ?, ?)");
+                $weekly_salary_id = uniqid('WSY'); // Generate unique ID
+
+                $stmt->bind_param("sssss", $weekly_salary_id, $formatted_from, $formatted_to, $data_json, $timestamp);
+
+                if (!$stmt->execute()) {
+                    throw new Exception("Failed to insert weekly_salary: " . $stmt->error);
+                }
+                $stmt->close();
+
+                // Process deductions for each staff
+                $errors = [];
+                foreach ($data as $staff_entry) {
+                    $staff_name = $staff_entry['staff_name'] ?? null;
+                    $deduction = (float) ($staff_entry['deduction'] ?? 0);
+
+                    if ($deduction > 0 && $staff_name) {
+                        // Find staff ID by name (assuming unique names)
+                        $stmtStaff = $conn->prepare("SELECT id, staff_id FROM staff WHERE Name = ? AND deleted_at = 0 LIMIT 1");
+                        $stmtStaff->bind_param("s", $staff_name);
+                        $stmtStaff->execute();
+                        $staffResult = $stmtStaff->get_result();
+                        $staff_row = $staffResult->fetch_assoc();
+                        $stmtStaff->close();
+
+                        if ($staff_row) {
+                            $staff_id_internal = $staff_row['id'];
+                            $staff_id_string = $staff_row['staff_id'];
+
+                            // Create advance log
+                            $advance_id = uniqid('ADV');
+                            $entry_date = $formatted_from; // Use from_date as entry_date
+                            $stmtAdvance = $conn->prepare("
+                                INSERT INTO staff_advance 
+                                (advance_id, weekly_salary_id, staff_id, staff_name, amount, type, recovery_mode, entry_date, created_at, delete_at)
+                                VALUES (?, ?, ?, ?, ?, 'less', 'salary', ?, ?, 0)
+                            ");
+                            $stmtAdvance->bind_param(
+                                "ssssdss",
+                                $advance_id,
+                                $weekly_salary_id,
+                                $staff_id_string,
+                                $staff_name,
+                                $deduction,
+                                $entry_date,
+                                $timestamp
+                            );
+                            if (!$stmtAdvance->execute()) {
+                                $errors[] = "Failed to create advance for $staff_name: " . $stmtAdvance->error;
+                            }
+                            $stmtAdvance->close();
+
+                            // Update staff advance balance
+                            $stmtUpdateStaff = $conn->prepare("UPDATE staff SET staff_advance = staff_advance - ? WHERE id = ? AND deleted_at = 0");
+                            $stmtUpdateStaff->bind_param("di", $deduction, $staff_id_internal);
+                            if (!$stmtUpdateStaff->execute()) {
+                                $errors[] = "Failed to update advance balance for $staff_name: " . $stmtUpdateStaff->error;
+                            }
+                            $stmtUpdateStaff->close();
+                        } else {
+                            $errors[] = "Staff not found for $staff_name";
+                        }
+                    }
+                }
+
+                if (!empty($errors)) {
+                    $conn->rollback();
+                    $output = [
+                        "head" => ["code" => 400, "msg" => "Weekly salary created but errors in deductions: " . implode('; ', $errors)]
+                    ];
+                } else {
+                    $conn->commit();
+                    $output = [
+                        "head" => ["code" => 200, "msg" => "Weekly salary created successfully"],
+                        "body" => ["weekly_salary_id" => $weekly_salary_id]
+                    ];
+                }
+            } catch (Exception $e) {
+                $conn->rollback();
+                $output = [
+                    "head" => ["code" => 400, "msg" => "Failed to create weekly salary: " . $e->getMessage()]
+                ];
+            }
+        }
+    }
 } else {
     $output = [
         "head" => ["code" => 400, "msg" => "Invalid Parameters"],
