@@ -47,56 +47,15 @@ if ($action === 'listProduct') {
     }
 }
 // Create Product
-// elseif ($action === 'createProduct') {
-//     $product_name = $obj->product_name ?? null;
-//     $Knitting_wage = $obj->Knitting_wage ?? null;
-//     $deluxe_Knitting_wage = $obj->deluxe_Knitting_wage ?? null;
-//     $packing_cooly = $obj->packing_cooly ?? null;
-//     $unit_cooly = $obj->unit_cooly ?? null; // New Field Added
-
-//     if ($product_name && ($Knitting_wage || $deluxe_Knitting_wage || $packing_cooly || $unit_cooly)) {
-//         $stmt = $conn->prepare("INSERT INTO products (product_name, Knitting_wage,deluxe_Knitting_wage, packing_cooly, unit_cooly, create_at) VALUES (?, ?, ?,?, ?, ?)");
-//         $stmt->bind_param("ssssss", $product_name, $Knitting_wage, $deluxe_Knitting_wage, $packing_cooly, $unit_cooly, $timestamp);
-
-//         if ($stmt->execute()) {
-//             $insertId = $conn->insert_id;
-//             $product_id = uniqueID("product", $insertId);
-
-//             $stmtUpdate = $conn->prepare("UPDATE products SET product_id = ? WHERE id = ?");
-//             $stmtUpdate->bind_param("si", $product_id, $insertId);
-//             $stmtUpdate->execute();
-
-//             $response = [
-//                 "status" => 200,
-//                 "message" => "Product Added Successfully",
-//                 "product_id" => $product_id
-//             ];
-//         } else {
-//             $response = [
-//                 "status" => 400,
-//                 "message" => "Failed to Add Product. Error: " . $stmt->error
-//             ];
-//         }
-//         $stmt->close();
-//     } else {
-//         $response = [
-//             "status" => 400,
-//             "message" => "Either Knitting Wage, Packing Cooly, or Unit Cooly is required."
-//         ];
-//     }
-// }
-
-// Create Product
 elseif ($action === 'createProduct') {
     $product_name = $obj->product_name ?? null;
     $Knitting_wage = $obj->Knitting_wage ?? null;
     $deluxe_Knitting_wage = $obj->deluxe_Knitting_wage ?? null;
     $packing_cooly = $obj->packing_cooly ?? null;
-    $unit_cooly = $obj->unit_cooly ?? null;
+    $unit_cooly = $obj->unit_cooly ?? null; // New Field Added
 
-    // CHANGE: Only require product_name to proceed
-    if ($product_name) { 
-        $stmt = $conn->prepare("INSERT INTO products (product_name, Knitting_wage, deluxe_Knitting_wage, packing_cooly, unit_cooly, create_at) VALUES (?, ?, ?, ?, ?, ?)");
+    if ($product_name && ($Knitting_wage || $deluxe_Knitting_wage || $packing_cooly || $unit_cooly)) {
+        $stmt = $conn->prepare("INSERT INTO products (product_name, Knitting_wage,deluxe_Knitting_wage, packing_cooly, unit_cooly, create_at) VALUES (?, ?, ?,?, ?, ?)");
         $stmt->bind_param("ssssss", $product_name, $Knitting_wage, $deluxe_Knitting_wage, $packing_cooly, $unit_cooly, $timestamp);
 
         if ($stmt->execute()) {
@@ -122,10 +81,12 @@ elseif ($action === 'createProduct') {
     } else {
         $response = [
             "status" => 400,
-            "message" => "Product Name is required."
+            "message" => "Either Knitting Wage, Packing Cooly, or Unit Cooly is required."
         ];
     }
 }
+
+
 // Update Product
 elseif ($action === 'updateProductInfo') {
     $edit_Product_id = $obj->edit_Product_id ?? null;
