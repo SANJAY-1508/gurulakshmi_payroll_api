@@ -120,6 +120,31 @@ elseif ($action === 'updateStaff' && isset($obj['staff_id']) && isset($obj['Name
     $stmtUpdate->close();
 }
 
+// <<<<<<<<<<===================== Update Advance =====================>>>>>>>>>>
+elseif ($action === 'updateAdvance' && isset($obj['staff_id']) && isset($obj['advance_amount'])) {
+    $staff_id = intval($obj['staff_id']); // Ensure int for id
+    $advance_amount = floatval($obj['advance_amount']);
+
+    if ($advance_amount <= 0) {
+        $output = ["head" => ["code" => 400, "msg" => "Invalid advance amount"]];
+    } else {
+        $stmtUpdate = $conn->prepare("UPDATE `staff` SET `staff_advance` = COALESCE(`staff_advance`, 0) + ? WHERE `id` = ? AND `deleted_at` = 0");
+        $stmtUpdate->bind_param("di", $advance_amount, $staff_id);
+
+        if ($stmtUpdate->execute()) {
+            if ($stmtUpdate->affected_rows > 0) {
+                $output = ["head" => ["code" => 200, "msg" => "Advance Updated Successfully"]];
+            } else {
+                $output = ["head" => ["code" => 404, "msg" => "Staff not found"]];
+            }
+        } else {
+            error_log("SQL Error: " . $conn->error);
+            $output = ["head" => ["code" => 400, "msg" => "Failed to Update Advance. Error: " . $conn->error]];
+        }
+        $stmtUpdate->close();
+    }
+}
+
 // <<<<<<<<<<===================== Delete Staff =====================>>>>>>>>>>
 elseif ($action === "deleteStaff") {
     $delete_staff_id = $obj['delete_staff_id'] ?? null;
