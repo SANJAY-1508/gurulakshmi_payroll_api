@@ -122,29 +122,51 @@ elseif ($action === 'updateStaff' && isset($obj['staff_id']) && isset($obj['Name
 
 // <<<<<<<<<<===================== Update Advance =====================>>>>>>>>>>
 elseif ($action === 'updateAdvance' && isset($obj['staff_id']) && isset($obj['advance_amount'])) {
-    $staff_id = intval($obj['staff_id']); // Ensure int for id
+    $staff_id = intval($obj['staff_id']);
     $advance_amount = floatval($obj['advance_amount']);
 
     if ($advance_amount <= 0) {
-        $output = ["head" => ["code" => 400, "msg" => "Invalid advance amount"]];
+        $output = ["head" => ["code" => 400, "msg" => "Advance amount must be greater than zero"]];
     } else {
-        $stmtUpdate = $conn->prepare("UPDATE `staff` SET `staff_advance` = COALESCE(`staff_advance`, 0) + ? WHERE `id` = ? AND `deleted_at` = 0");
-        $stmtUpdate->bind_param("di", $advance_amount, $staff_id);
+        $type = 'add';
+        $recovery_mode = 'direct';
+        $advance_id = 'ADV' . date('Ymd') . str_pad($staff_id, 4, '0', STR_PAD_LEFT) . str_pad(mt_rand(1, 999), 3, '0', STR_PAD_LEFT);
+        $entry_date = date('Y-m-d');
 
-        if ($stmtUpdate->execute()) {
-            if ($stmtUpdate->affected_rows > 0) {
-                $output = ["head" => ["code" => 200, "msg" => "Advance Updated Successfully"]];
-            } else {
-                $output = ["head" => ["code" => 404, "msg" => "Staff not found"]];
-            }
-        } else {
-            error_log("SQL Error: " . $conn->error);
-            $output = ["head" => ["code" => 400, "msg" => "Failed to Update Advance. Error: " . $conn->error]];
+        // Start transaction for data consistency
+        $conn->begin_transaction();
+
+        try {
+            // 1. Insert into staff_advance history table
+            $stmtInsert = $conn->prepare("
+                INSERT INTO `staff_advance` 
+                (`advance_id`, `staff_id`, `staff_name`, `amount`, `type`, `recovery_mode`, `weekly_salary_id`, `entry_date`, `created_at`)
+                VALUES (?, ?, (SELECT `Name` FROM `staff` WHERE `id` = ?), ?, ?, ?, NULL, ?, NOW())
+            ");
+            $stmtInsert->bind_param("sisdsss", $advance_id, $staff_id, $staff_id, $advance_amount, $type, $recovery_mode, $entry_date);
+            $stmtInsert->execute();
+            $stmtInsert->close();
+
+            // 2. Update running total in staff table
+            $stmtUpdate = $conn->prepare("
+                UPDATE `staff` 
+                SET `staff_advance` = COALESCE(`staff_advance`, 0) + ? 
+                WHERE `id` = ? AND `deleted_at` = 0
+            ");
+            $stmtUpdate->bind_param("di", $advance_amount, $staff_id);
+            $stmtUpdate->execute();
+            $stmtUpdate->close();
+
+            $conn->commit();
+            $output = ["head" => ["code" => 200, "msg" => "Advance Added Successfully"]];
+
+        } catch (Exception $e) {
+            $conn->rollback();
+            error_log("Advance Transaction Error: " . $e->getMessage());
+            $output = ["head" => ["code" => 400, "msg" => "Failed to add advance. Please try again."]];
         }
-        $stmtUpdate->close();
     }
 }
-
 // <<<<<<<<<<===================== Delete Staff =====================>>>>>>>>>>
 elseif ($action === "deleteStaff") {
     $delete_staff_id = $obj['delete_staff_id'] ?? null;
