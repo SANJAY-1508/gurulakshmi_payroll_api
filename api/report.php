@@ -68,37 +68,39 @@ if ($action === 'listStocks') {
     $finalReport = [];
 
     // Updated queries based on actual table structure
-    $queries = [
-        "Deluxe Payroll" => "SELECT s.id AS staff_numeric_id, dp.staff_name, 'டீலக்ஸ் பின்னல்' AS staff_type, dp.entry_date, dp.products, dp.total 
-                         FROM deluxe dp 
-                         JOIN staff s ON dp.staff_name = s.Name 
-                         WHERE dp.entry_date BETWEEN ? AND ? AND dp.delete_at = 0",
+   // Update these lines in report.php inside the listCoolieReport action
+$queries = [
+    "Deluxe Payroll" => "SELECT s.id AS staff_numeric_id, s.staff_advance, dp.staff_name, 'டீலக்ஸ் பின்னல்' AS staff_type, dp.entry_date, dp.products, dp.total 
+                     FROM deluxe dp 
+                     JOIN staff s ON dp.staff_name = s.Name 
+                     WHERE dp.entry_date BETWEEN ? AND ? AND dp.delete_at = 0",
 
-        "Knotting Payroll" => "SELECT s.id AS staff_numeric_id, kp.staff_name, 'பின்னல் பிரிவு' AS staff_type, kp.entry_date, kp.products, kp.total 
-                           FROM knotting_payroll kp 
-                           JOIN staff s ON kp.staff_name = s.Name 
-                           WHERE kp.entry_date BETWEEN ? AND ? AND kp.delete_at = 0",
+    "Knotting Payroll" => "SELECT s.id AS staff_numeric_id, s.staff_advance, kp.staff_name, 'பின்னல் பிரிவு' AS staff_type, kp.entry_date, kp.products, kp.total 
+                       FROM knotting_payroll kp 
+                       JOIN staff s ON kp.staff_name = s.Name 
+                       WHERE kp.entry_date BETWEEN ? AND ? AND kp.delete_at = 0",
 
-        "Packing Payroll" => "SELECT s.id AS staff_numeric_id, pp.staff_name, 'பாக்கெட் பிரிவு' AS staff_type, pp.entry_date, pp.products, pp.total 
-                          FROM packing_payroll pp 
-                          JOIN staff s ON pp.staff_name = s.Name 
-                          WHERE pp.entry_date BETWEEN ? AND ? AND pp.delete_at = 0",
+    "Packing Payroll" => "SELECT s.id AS staff_numeric_id, s.staff_advance, pp.staff_name, 'பாக்கெட் பிரிவு' AS staff_type, pp.entry_date, pp.products, pp.total 
+                      FROM packing_payroll pp 
+                      JOIN staff s ON pp.staff_name = s.Name 
+                      WHERE pp.entry_date BETWEEN ? AND ? AND pp.delete_at = 0",
 
-        "Ring Boxing Payroll" => "SELECT s.id AS staff_numeric_id, rbp.staff_name, 'வளையம் குத்து பிரிவு' AS staff_type, rbp.entry_date, rbp.products, rbp.total 
-                              FROM ring_boxing rbp 
-                              JOIN staff s ON rbp.staff_name = s.Name 
-                              WHERE rbp.entry_date BETWEEN ? AND ? AND rbp.delete_at = 0",
+    "Ring Boxing Payroll" => "SELECT s.id AS staff_numeric_id, s.staff_advance, rbp.staff_name, 'வளையம் குத்து பிரிவு' AS staff_type, rbp.entry_date, rbp.products, rbp.total 
+                          FROM ring_boxing rbp 
+                          JOIN staff s ON rbp.staff_name = s.Name 
+                          WHERE rbp.entry_date BETWEEN ? AND ? AND rbp.delete_at = 0",
 
-        "Explosive Payroll" => "SELECT s.id AS staff_numeric_id, edp.staff_name, 'வெடி உருடு பிரிவு' AS staff_type, edp.entry_date, edp.products, edp.total 
-                            FROM explosive_device_payroll edp 
-                            JOIN staff s ON edp.staff_name = s.Name 
-                            WHERE edp.entry_date BETWEEN ? AND ? AND edp.delete_at = 0",
+    "Explosive Payroll" => "SELECT s.id AS staff_numeric_id, s.staff_advance, edp.staff_name, 'வெடி உருடு பிரிவு' AS staff_type, edp.entry_date, edp.products, edp.total 
+                        FROM explosive_device_payroll edp 
+                        JOIN staff s ON edp.staff_name = s.Name 
+                        WHERE edp.entry_date BETWEEN ? AND ? AND edp.delete_at = 0",
 
-        "Pay Payroll" => "SELECT s.id AS staff_numeric_id, p.staff_name, 'செலுத்து பிரிவு' AS staff_type, p.entry_date, p.products, p.total 
-                      FROM pay p 
-                      JOIN staff s ON p.staff_name = s.Name 
-                      WHERE p.entry_date BETWEEN ? AND ? AND p.delete_at = 0",
-    ];
+    "Pay Payroll" => "SELECT s.id AS staff_numeric_id, s.staff_advance, p.staff_name, 'செலுத்து பிரிவு' AS staff_type, p.entry_date, p.products, p.total 
+                  FROM pay p 
+                  JOIN staff s ON p.staff_name = s.Name 
+                  WHERE p.entry_date BETWEEN ? AND ? AND p.delete_at = 0",
+];
+
 
     foreach ($queries as $payrollType => $query) {
         $stmt = $conn->prepare($query);
@@ -123,6 +125,7 @@ if ($action === 'listStocks') {
                     'total' => 0
                 ];
                 $reportEntry['staff_id'] = $row['staff_numeric_id'] ?? null;
+                $reportEntry['staff_advance'] = $row['staff_advance'] ?? 0;
                 // Add decoded products to the report entry
                 $calculatedTotal = 0;
                 if (!empty($products)) {
@@ -153,7 +156,7 @@ if ($action === 'listStocks') {
                 "action" => "listCoolieReport",
                 "from_date" => $fromDate,
                 "to_date" => $toDate,
-                "report" => []
+                "report" => []         
             ]
         ];
     } else {
